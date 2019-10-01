@@ -1,18 +1,25 @@
-const mysql = require('mysql');
 const express = require('express');
+const {DB_HOST,DB_USER,DB_PASS,DB_NAME,SECRET} = require('./config').envdata;
+const jwt  = require('jsonwebtoken');
+var cookieParser = require('cookie-parser');
+const checkToken = require('./TokenVerify/TokenVerify');
+var uniqid = require('uniqid');
+
 
 let knex=require('knex')({
     client:'mysql',
     connection:{
-    'host':'localhost',
-    'user':'root',
-    'password':'jagan@jagan',
-    'database':'turingdb'
-    }
+    'host':DB_HOST,
+    'user':DB_USER,
+    'password':DB_PASS,
+    'database':DB_NAME
+    },useNullAsDefault:true
 });
 
 const app = express();
 app.use(express.json())
+app.use(cookieParser())
+
 
 var departments = express.Router();
 app.use('/',departments);
@@ -28,7 +35,19 @@ require('./routes/attributes')(attributes,knex);
 
 var products = express.Router();
 app.use('/',products);
-require('./routes/products')(products,knex)
+require('./routes/products')(products,knex);
+
+var customers =express.Router();
+app.use('/',customers);
+require('./routes/customers')(customers,knex,jwt,SECRET,checkToken);
+
+var orders = express.Router();
+app.use('/',orders);
+require('./routes/orders')(orders,knex,jwt,SECRET,checkToken);
+
+var shoppingcart = express.Router();
+app.use('/',shoppingcart);
+require('./routes/shoppingcart')(shoppingcart,knex,jwt,SECRET,checkToken,uniqid);
 
 var server = app.listen(8000, ()=>{
     var port = server.address().port;
