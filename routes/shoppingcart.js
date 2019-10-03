@@ -1,4 +1,4 @@
-module.exports=(shoppingcart,knex,jwt,SECRET,checkToken,uniqid)=>{
+module.exports=(shoppingcart,knex,jwt,SECRET,checkToken,uniqid,_)=>{
 
     // generating a shopping cart id----------------
     shoppingcart.get('/shoppingcart/generateUniqueId',checkToken,(req,res)=>{
@@ -153,7 +153,11 @@ module.exports=(shoppingcart,knex,jwt,SECRET,checkToken,uniqid)=>{
                         's.quantity'
                         )
                     .where('s.cart_id',req.body.cart_id)
-                    .join('product as p','p.product_id','=','s.product_id')
+                    .join(
+                        'product as p',
+                        'p.product_id','=',
+                        's.product_id'
+                        )
                     .then((result)=>{
                         console.log('result',result)
                         var rest2=result.filter((i)=>{
@@ -178,7 +182,7 @@ module.exports=(shoppingcart,knex,jwt,SECRET,checkToken,uniqid)=>{
         })
     })
 
-    // Get list of products in shopping cart using cart_id------------------ex--localhost:8000/shoppingcart/{cart_id}
+    // Get list of products of shopping cart using cart_id------------------ex--localhost:8000/shoppingcart/{cart_id}
     shoppingcart.get('/shoppingcart/:cart_id',(req,res)=>{
         knex('shopping_cart as s')
         .select(
@@ -191,7 +195,11 @@ module.exports=(shoppingcart,knex,jwt,SECRET,checkToken,uniqid)=>{
             's.quantity'
             )
         .where('s.cart_id',req.params.cart_id)
-        .join('product as p','p.product_id','=','s.product_id')
+        .join(
+            'product as p',
+            'p.product_id','=',
+            's.product_id'
+            )
         .then((result)=>{
             var rest2=result.filter((i)=>{
                 return(i['subtotal']=i.price*i.quantity)
@@ -221,7 +229,11 @@ module.exports=(shoppingcart,knex,jwt,SECRET,checkToken,uniqid)=>{
                 's.quantity'
                 )
             .where('s.item_id',req.params.item_id)
-            .join('product as p','p.product_id','=','s.product_id')
+            .join(
+                'product as p',
+                'p.product_id','=',
+                's.product_id'
+                )
             .then((result)=>{
                 var rest2=result.filter((i)=>{
                     return(i['subtotal']=i.price*i.quantity)
@@ -258,5 +270,192 @@ module.exports=(shoppingcart,knex,jwt,SECRET,checkToken,uniqid)=>{
         })
     })
 
-    
+    // Get total amount of the cart by adding all subtotals using cart_id in params -------------------------------ex--localhost:8000/shoppingcart/totalAmount/{cart_id}
+    shoppingcart.get('/shoppingcart/totalAmount/:cart_id',(req,res)=>{
+        knex('shopping_cart as s')
+        .where('s.cart_id',req.params.cart_id)
+        .select(
+            'p.price',
+            's.quantity'
+        )
+        .join(
+            'product as p',
+            'p.product_id','=',
+            's.product_id'
+            )
+        .then((result)=>{
+            var rest1=result.filter((i)=>{
+                return(i['subtotal']=i.price*i.quantity)
+            })
+            var totalAmount = _.reduce(rest1, (memo, num) => { return memo + num.subtotal; }, 0)  
+            res.json([{totalAmount:totalAmount}])
+        })
+        .catch((err)=>{
+            console.log('err in fetching data from shopping_cart',err)
+            res.json(err)
+        })
+    })
+
+    // creating another save_later table to save items for later-------------ex--localhost:8000/shoppingcart/saveForLater/{item_id}
+    shoppingcart.get('/shoppingcart/saveForLater/:item_id',(req,res)=>{
+        knex.schema
+        .hasTable('save_for_later')
+        .then((exists)=>{
+            if(!exists){
+                return knex.schema
+                .createTable('save_for_later',(t)=>{
+                // Creating table ----------------------
+                    t.integer('item_id').primary();
+                    t.string('cart_id');
+                    t.integer('product_id');
+                    t.string('attributes');
+                    t.string('quantity');
+                    t.string('buy_now');
+                    t.datetime('added_on');
+                // table created and now shifting data to saveForLater--------------
+                    knex('shopping_cart as s')
+                    .select(
+                        's.item_id',
+                        's.cart_id',
+                        's.product_id',
+                        's.attributes',
+                        's.quantity',
+                        's.buy_now',
+                        's.added_on'
+                    )
+                    .where('s.item_id',req.params.item_id)
+                    .then((data)=>{
+                        knex('save_for_later')
+                        .insert(data[0])
+                        .then((data1)=>{
+                            console.log('data moved to save_for_later',data[0])
+                            // deleting moved item from shoppingcart using item_id--------------
+                            knex('shopping_cart')
+                            .where('shopping_cart.item_id',req.params.item_id)
+                            .del()
+                            .then((data2)=>{
+                                console.log('data removed from shoppingcart via item_id' ,data2)
+                                res.json(data[0])
+                            })
+                            .catch((err)=>{
+                                console.log('err in removing data from shopping cart',err)
+                                res.status(404).json(err)
+                            })
+                        })
+                        .catch((err)=>{
+                            console.log('err in inserting data into save_for_later',err)
+                            res.status(404).json(err)
+                        })
+                    })
+                    .catch(err => res.status(404).json(err))
+
+                })                
+            }else{
+                console.log('table exists')
+                knex('shopping_cart as s')
+                .select(
+                    's.item_id',
+                    's.cart_id',
+                    's.product_id',
+                    's.attributes',
+                    's.quantity',
+                    's.buy_now',
+                    's.added_on'
+                )
+                .where('s.item_id',req.params.item_id)
+                .then((data)=>{
+                    knex('save_for_later')
+                    .insert(data[0])
+                    .then((result)=>{
+                        console.log('data moved to save_for_later',data[0])
+                        // deleting moved item from shoppingcart using item_id--------------
+                        knex('shopping_cart')
+                        .where('shopping_cart.item_id',req.params.item_id)
+                        .del()
+                        .then((data2)=>{
+                            console.log('data removed from shoppingcart via item_id' ,data2)
+                            res.json(data[0])
+                        })
+                        .catch((err)=>{
+                            console.log('err in removing data from shopping cart',err)
+                            res.status(404).json(err)
+                        })
+                    })
+                    .catch((err)=>{
+                        console.log('err in inserting data into save_for_later',err)
+                        res.status(404).json(err)
+                    })
+                })
+                .catch(err => res.status(404).json(err))
+            }
+        })
+        .catch((err)=>{
+            console.log('err in checking the presence of save_for_later table')
+            res.json
+        })
+    })
+
+    // getting all data from save_for_later table--------------------http://localhost:8000/shoppingcart/getSaved/{cart_id}-------   
+    shoppingcart.get('/shoppingcart/getSaved/:cart_id',(req,res)=>{
+        knex('save_for_later')
+        .select('*')
+        .where('save_for_later.cart_id',req.params.cart_id)
+        .then((result)=>{
+            res.json(result)
+        })
+        .catch((err)=>{
+            console.log('err in fetching data from save_for_later table',err)
+            res.status(404).send(err)
+        })
+    })
+
+    // moving all data to cart again from save_for_later back---------------http://localhost:8000/shoppingcart/moveToCart/{item_id}
+    shoppingcart.get('/shoppingcart/moveToCart/:item_id',(req,res)=>{
+        knex('save_for_later')
+        .select('*')
+        .where('save_for_later.item_id',req.params.item_id)
+        .then((data)=>{
+            knex('shopping_cart')
+            .insert(data[0])
+            .then((data2)=>{
+                console.log('data moved back to shopping cart from save_for_later table',data2)
+                // deleting moved item from save_for_later table to shoppingcart using item_id--------------
+                knex('save_for_later')
+                .where('save_for_later.item_id',req.params.item_id)
+                .del()
+                .then((data3)=>{
+                    console.log('data removed from save_for_later via item_id' ,data3)
+                    res.json(data[0])
+                })
+                .catch((err)=>{
+                    console.log('err in removing data from save_for_later table',err)
+                    res.status(404).json(err)
+                })
+            })
+            .catch((err)=>{
+                console.log('err in moving data from save_for_later table to shopping cart',err)
+                res.status(404).send(err)
+            })
+        })
+        .catch((err)=>{
+            console.log('err in fetching item detail from save_for_later table',err)
+            res.status(404).send(err)
+        })
+    })
+
+    // removing a product from shopping cart using item_id--------------------
+    shoppingcart.delete('/shoppingcart/removeProduct/:item_id',(req,res)=>{
+        knex('shopping_cart')
+        .where('shopping_cart.item_id',req.params.item_id)
+        .del()
+        .then((data)=>{
+            console.log('item has deleted from shoppingcart using item_id',data)
+            res.status(404).send('item deleted from shoppingcart successfully')
+        })
+        .catch((err)=>{
+            console.log('err in deleting item from shopping cart',err)
+            res.status(404).send(err)
+        })
+    })
+
 }

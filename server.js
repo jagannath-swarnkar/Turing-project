@@ -4,7 +4,7 @@ const jwt  = require('jsonwebtoken');
 var cookieParser = require('cookie-parser');
 const checkToken = require('./TokenVerify/TokenVerify');
 var uniqid = require('uniqid');
-
+var _ = require('underscore');
 
 let knex=require('knex')({
     client:'mysql',
@@ -43,11 +43,21 @@ require('./routes/customers')(customers,knex,jwt,SECRET,checkToken);
 
 var orders = express.Router();
 app.use('/',orders);
-require('./routes/orders')(orders,knex,jwt,SECRET,checkToken);
+require('./routes/orders')(orders,knex,jwt,SECRET,checkToken,_);
 
 var shoppingcart = express.Router();
 app.use('/',shoppingcart);
-require('./routes/shoppingcart')(shoppingcart,knex,jwt,SECRET,checkToken,uniqid);
+require('./routes/shoppingcart')(shoppingcart,knex,jwt,SECRET,checkToken,uniqid,_);
+
+var tax = express.Router();
+app.use('/',tax);
+require('./routes/tax')(tax,knex)
+
+var shipping = express.Router();
+app.use('/',shipping);
+require('./routes/shipping')(shipping,knex)
+
+
 
 var server = app.listen(8000, ()=>{
     var port = server.address().port;
