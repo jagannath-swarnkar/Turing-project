@@ -35,7 +35,7 @@ require('./routes/attributes')(attributes,knex);
 
 var products = express.Router();
 app.use('/',products);
-require('./routes/products')(products,knex);
+require('./routes/products')(products,knex,jwt,SECRET,checkToken);
 
 var customers =express.Router();
 app.use('/',customers);
